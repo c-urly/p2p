@@ -21,7 +21,7 @@ actor Main
     numKeys = 0
 
     if env.args.size() != 3 then
-      env.out.print("Usage: chordify <numNodes> <numRequests>")
+      env.out.print("Usage: p2p <numNodes> <numRequests>")
       return
     end
 
@@ -50,32 +50,36 @@ actor Main
   fun ref generate_nodes_with_keys(num_nodes: U64, num_keys: U64) =>
     var bootstrap_node: (Node | None) = None
     var bootstrap_node_id: U64 = 0
+
+    let m: USize = ((num_nodes * 3).log2().ceil().usize())
+    let max_id: U64 = (1 << m) - 1  // Calculate 2^m - 1 for ID and key space
+
     let keys_per_node = num_keys / num_nodes
 
     for i in Range[U64](0, num_nodes) do
-      let node_id: U64 = _rand.u64()
+      // Generate a node ID within the range [0, 2^m - 1]
+      let node_id: U64 = _rand.u64() % (max_id + 1)
       var initial_data: Map[U64, String] iso = Map[U64, String]
 
-
+      // Generate unique keys for this node, also constrained to [0, 2^m - 1]
       for j in Range[U64](0, keys_per_node) do
-        let key: U64 = _rand.u64()
+        let key: U64 = _rand.u64() % (max_id + 1)
         let value: String = "Value" + key.string()
         initial_data(key) = value
         all_keys.push(key)
       end
 
-      var node: Node tag = Node(_env, this, node_id, 6, consume initial_data)
+      // Create Node
+      var node: Node tag = Node(_env, this, node_id, m, consume initial_data)
 
       if bootstrap_node is None then
         bootstrap_node = node
         bootstrap_node_id = node_id
         _env.out.print("Bootstrap node created with ID: " + node_id.string())
       else
-
         node.join(bootstrap_node)
         _env.out.print("Node with ID " + node_id.string() + " joined the network via bootstrap node " + bootstrap_node_id.string())
       end
-
 
       nodes_map.update(node_id, node)
     end
