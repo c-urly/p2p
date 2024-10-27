@@ -16,6 +16,7 @@ actor Node
   var _predecessor_check_timer: Timer
   var _data: Map[U64, String] iso
   let _main: Main
+  var _continue : Bool = true
 
   new create(env: Env, main: Main,  id: U64, m: USize, initial_data: Map[U64, String] iso) =>
     _env = env
@@ -32,13 +33,13 @@ actor Node
 
     _env.out.print("Node " + _id.string() + " created with " + m.string() + " bit hash space and initial keys.")
 
-    let stabilize_notify = ChordTimerNotify(_env, this, "stabilize")
+    let stabilize_notify = ChordTimerNotify(_env, this, "stabilize", recover _continue end)
     _stabilize_timer = Timer(consume stabilize_notify, 5_000_000_000, 5_000_000_000) // 5 seconds
 
-    let fix_fingers_notify = ChordTimerNotify(_env, this, "fix_fingers")
+    let fix_fingers_notify = ChordTimerNotify(_env, this, "fix_fingers", recover _continue end)
     _timer = Timer(consume fix_fingers_notify, 1_000_000_000, 10_000_000_000) // 1 second, 10 seconds
 
-    let check_predecessor_notify = ChordTimerNotify(_env, this, "check_predecessor")
+    let check_predecessor_notify = ChordTimerNotify(_env, this, "check_predecessor", recover _continue end)
     _predecessor_check_timer = Timer(consume check_predecessor_notify, 10_000_000_000, 10_000_000_000) // 10 seconds
 
 
@@ -79,7 +80,6 @@ be join(bootstrap_node: (Node | None)) =>
 
 
 
-// Find the successor for a given ID with a specified purpose and optional hop counting
 be find_successor(id: U64, requester: (Node | None), purpose: String = "find_successor", hop_count: U64 = 0, finger_index: USize = USize.max_value()) =>
   _env.out.print("Node " + _id.string() + " received find_successor request for ID " + id.string() + " with purpose: " + purpose + " and hop count: " + hop_count.string())
 
@@ -333,17 +333,25 @@ be find_successor(id: U64, requester: (Node | None), purpose: String = "find_suc
 
   be request_predecessor(requestor: Node) =>
     requestor.receive_predecessor(_predecessor, _predecessor_id)
-
+  
+  be stop() =>
+    _continue = false
+    //     stabilize_notify.stop()
+    // fix_fingers_notify.stop()
+    // check_predecessor_notify.stop()
+    
 
 class ChordTimerNotify is TimerNotify
   let _node: Node
   let _task: String
   var _env: Env
+  var _continue: Bool val = true
 
-  new iso create(env:Env, node: Node, task: String) =>
+  new iso create(env:Env, node: Node, task: String, cont: Bool val) =>
     _env = env
     _node = node
     _task = task
+    _continue = cont
 
   fun ref apply(timer: Timer, count: U64): Bool =>
     match _task
@@ -356,4 +364,7 @@ class ChordTimerNotify is TimerNotify
     else
       _env.out.print("Unknown task " + _task)
     end
-    true
+    _continue
+  
+  // fun ref stop() =>
+  //   _continue = false

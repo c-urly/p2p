@@ -51,8 +51,8 @@ actor Main
     var bootstrap_node: (Node | None) = None
     var bootstrap_node_id: U64 = 0
 
-    let m: USize = ((num_nodes * 3).log2().ceil().usize())
-    let max_id: U64 = (1 << m) - 1  // Calculate 2^m - 1 for ID and key space
+    let m: USize = ((num_nodes * 3).f32().log2().ceil().usize())
+    let max_id: U64 = (1 << m).u64() - 1  // Calculate 2^m - 1 for ID and key space
 
     let keys_per_node = num_keys / num_nodes
 
@@ -106,6 +106,14 @@ actor Main
 
     if total_requests == (numNodes * numRequests) then
       calculate_average_hops()
+      try
+        for i in Range[U64](0, numNodes) do
+          let node = nodes_map(i)?
+          node.stop()
+        end
+      else
+        _env.out.print("Error printing routing table")
+      end
     end
 
   fun ref calculate_average_hops() =>
