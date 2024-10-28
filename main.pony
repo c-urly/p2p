@@ -12,6 +12,7 @@ actor Main
   var total_hops: U64 = 0
   var total_requests: U64 = 0
   var all_keys: Array[U64] = Array[U64]
+  let timers : Timers = Timers
 
   new create(env: Env) =>
     _env = env
@@ -70,7 +71,7 @@ actor Main
       end
 
       // Create Node
-      var node: Node tag = Node(_env, this, node_id, m, consume initial_data)
+      var node: Node tag = Node(_env, this, node_id, m, consume initial_data, timers)
 
       if bootstrap_node is None then
         bootstrap_node = node
@@ -80,7 +81,6 @@ actor Main
         node.join(bootstrap_node)
         _env.out.print("Node with ID " + node_id.string() + " joined the network via bootstrap node " + bootstrap_node_id.string())
       end
-
       nodes_map.update(node_id, node)
     end
 
