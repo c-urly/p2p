@@ -11,14 +11,15 @@ actor Node
   var _finger_table: Map[U64,(Node|None)]
   var _next_finger: USize
   var _m: USize
-  var _timer: Timer
-  var _stabilize_timer: Timer
-  var _predecessor_check_timer: Timer
+  var _timer: Timer tag
+  var _stabilize_timer: Timer tag
+  var _predecessor_check_timer: Timer tag
   var _data: Map[U64, String] iso
   let _main: Main
-  var _continue : Bool = true
+  let timers: Timers
 
-  new create(env: Env, main: Main,  id: U64, m: USize, initial_data: Map[U64, String] iso) =>
+  new create(env: Env, main: Main,  id: U64, m: USize, initial_data: Map[U64, String] iso, timers': Timers) =>
+    timers = timers'
     _env = env
     _id = id
     _m = m
@@ -33,14 +34,20 @@ actor Node
 
     _env.out.print("Node " + _id.string() + " created with " + m.string() + " bit hash space and initial keys.")
 
-    let stabilize_notify = ChordTimerNotify(_env, this, "stabilize", recover _continue end)
-    _stabilize_timer = Timer(consume stabilize_notify, 5_000_000_000, 5_000_000_000) // 5 seconds
+    let stabilize_notify = ChordTimerNotify(_env, this, "stabilize")
+    let stabilize_timer' = Timer(consume stabilize_notify, 5_000_000_000, 5_000_000_000) // 5 seconds
+    _stabilize_timer = stabilize_timer'
+    timers(consume stabilize_timer')
 
-    let fix_fingers_notify = ChordTimerNotify(_env, this, "fix_fingers", recover _continue end)
-    _timer = Timer(consume fix_fingers_notify, 1_000_000_000, 10_000_000_000) // 1 second, 10 seconds
+    let fix_fingers_notify = ChordTimerNotify(_env, this, "fix_fingers")
+    let timer' = Timer(consume fix_fingers_notify, 1_000_000_000, 10_000_000_000) // 1 second, 10 seconds
+    _timer = timer'
+    timers(consume timer')
 
-    let check_predecessor_notify = ChordTimerNotify(_env, this, "check_predecessor", recover _continue end)
-    _predecessor_check_timer = Timer(consume check_predecessor_notify, 10_000_000_000, 10_000_000_000) // 10 seconds
+    let check_predecessor_notify = ChordTimerNotify(_env, this, "check_predecessor")
+    let predecessor_check_timer' = Timer(consume check_predecessor_notify, 10_000_000_000, 10_000_000_000) // 10 seconds
+    _predecessor_check_timer = predecessor_check_timer'
+    timers(consume predecessor_check_timer')
 
 
 be join(bootstrap_node: (Node | None)) =>
@@ -335,7 +342,9 @@ be find_successor(id: U64, requester: (Node | None), purpose: String = "find_suc
     requestor.receive_predecessor(_predecessor, _predecessor_id)
   
   be stop() =>
-    _continue = false
+    timers.cancel(_timer)
+    timers.cancel(_stabilize_timer)
+    timers.cancel(_predecessor_check_timer)
     //     stabilize_notify.stop()
     // fix_fingers_notify.stop()
     // check_predecessor_notify.stop()
@@ -345,13 +354,11 @@ class ChordTimerNotify is TimerNotify
   let _node: Node
   let _task: String
   var _env: Env
-  var _continue: Bool val = true
 
-  new iso create(env:Env, node: Node, task: String, cont: Bool val) =>
+  new iso create(env:Env, node: Node, task: String) =>
     _env = env
     _node = node
     _task = task
-    _continue = cont
 
   fun ref apply(timer: Timer, count: U64): Bool =>
     match _task
@@ -364,7 +371,7 @@ class ChordTimerNotify is TimerNotify
     else
       _env.out.print("Unknown task " + _task)
     end
-    _continue
+    true
   
   // fun ref stop() =>
   //   _continue = false
