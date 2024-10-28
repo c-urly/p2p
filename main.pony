@@ -1,6 +1,7 @@
 use "time"
 use "collections"
 use "random"
+use "math"
 
 actor Main
   let _env: Env
@@ -11,8 +12,12 @@ actor Main
   var _rand: Rand
   var total_hops: U64 = 0
   var total_requests: U64 = 0
-  var all_keys: Array[U64] = Array[U64]
   let timers : Timers = Timers
+  let node_ids: Array[U64]
+  let temp_array: Array[U64]
+  let initial_data: Map[U64, String]
+  var all_keys: MinHeap[U64]
+  var stabilized_nodes:Array[U64]
 
   new create(env: Env) =>
     _env = env
@@ -20,7 +25,11 @@ actor Main
     numNodes = 0
     numRequests = 0
     numKeys = 0
-
+    node_ids = Array[U64]
+    temp_array = Array[U64]
+    initial_data = Map[U64, String]
+    all_keys = MinHeap[U64](10)
+    stabilized_nodes = Array[U64]
     if env.args.size() != 3 then
       env.out.print("Usage: p2p <numNodes> <numRequests>")
       return
@@ -30,81 +39,139 @@ actor Main
       numNodes = env.args(1)?.u64()?
       numRequests = env.args(2)?.u64()?
       numKeys = 3 * numNodes
-
+      all_keys = MinHeap[U64](numKeys.usize())
       env.out.print("numNodes: " + numNodes.string())
       env.out.print("numRequests: " + numRequests.string())
       env.out.print("numKeys: " + numKeys.string())
 
 
-      generate_nodes_with_keys(numNodes, numKeys)
-
     try
-      simulate_requests(numRequests)?
+      generate_nodes_with_keys(numNodes, numKeys)?
+      // simulate_requests(numRequests)
     else
       env.out.print("Error getting keys")
     end
+      let notify = Notify(this, _env)  // Pass 'Main' ref to Notify
+      let timer = Timer(consume notify, 3_000_000_000, 0)
+      // timers(consume timer)
     else
       env.out.print("Error: Unable to parse arguments.")
     end
 
 
-  fun ref generate_nodes_with_keys(num_nodes: U64, num_keys: U64) =>
-    var bootstrap_node: (Node | None) = None
-    var bootstrap_node_id: U64 = 0
+  fun ref generate_nodes_with_keys(num_nodes: U64, num_keys: U64)? =>
 
-    let m: USize = ((num_nodes * 3).f32().log2().ceil().usize())
-    let max_id: U64 = (1 << m).u64() - 1  // Calculate 2^m - 1 for ID and key space
 
-    let keys_per_node = num_keys / num_nodes
+      let m: USize = 10
+      let id_space: U64 = (1 << m.u64()) - 1  // 2^m - 1 for the ID space
 
-    for i in Range[U64](0, num_nodes) do
-      // Generate a node ID within the range [0, 2^m - 1]
-      let node_id: U64 = _rand.u64() % (max_id + 1)
-      var initial_data: Map[U64, String] iso = Map[U64, String]
+      let keys_per_node = num_keys / num_nodes
+      
+     
+      var nodes_list: Array[(U64, Node tag)] = Array[(U64, Node tag)](num_nodes.usize())
+      var max_id: U64 = 0
 
-      // Generate unique keys for this node, also constrained to [0, 2^m - 1]
-      for j in Range[U64](0, keys_per_node) do
-        let key: U64 = _rand.u64() % (max_id + 1)
-        let value: String = "Value" + key.string()
-        initial_data(key) = value
+
+      for i in Range[U64](0, num_nodes) do
+        let node_id: U64 = _rand.u64() % (id_space + 1)
+        let node: Node tag = Node(_env, this, node_id, m)
+        nodes_list.push((node_id, node))
+        max_id = max_id.max(node_id)
+        _env.out.print("[Rishi]Generated node with ID: " + node_id.string())
+        nodes_map.update(node_id, node)
+      end
+
+
+      let bootstrap_index = _rand.u64() % num_nodes
+      let bootstrap_node: Node = nodes_list(bootstrap_index.usize())?._2
+      let bootstrap_node_id: U64 = nodes_list(bootstrap_index.usize())?._1
+      _env.out.print("[Rishi]Selected bootstrap node with ID: " + bootstrap_node_id.string())
+
+
+      for i in Range[U64](0,nodes_list.size().u64()) do
+        let node_id: U64 = nodes_list(i.usize())?._1
+        let node: Node = nodes_list(i.usize())?._2
+        if node_id != bootstrap_node_id then
+          bootstrap_node.join(node)
+          _env.out.print("Node with ID " + node_id.string() + " joined the network via bootstrap node " + bootstrap_node_id.string())
+        end
+      end
+
+      _env.out.print("[Rishi]Max Id: " + max_id.string())
+      for i in Range[U64](0, num_keys) do
+        let key: U64 = _rand.u64() % (max_id)
         all_keys.push(key)
+        temp_array.push(key)
+        initial_data(key) = "File"+key.string()
+        _env.out.print("[Rishi] Key: "+key.string()+ " " + "File-"+key.string())
       end
 
-      // Create Node
-      var node: Node tag = Node(_env, this, node_id, m, consume initial_data, timers)
 
-      if bootstrap_node is None then
-        bootstrap_node = node
-        bootstrap_node_id = node_id
-        _env.out.print("Bootstrap node created with ID: " + node_id.string())
+ 
+
+  // fun ref simulate_requests(num_requests: U64)? =>
+  //   _env.out.print("Simulating " + num_requests.string() + " requests per node.")
+
+  //   for node_id in nodes_map.keys() do
+  //     let node = nodes_map(node_id)?
+
+  //     for _ in Range[U64](0, num_requests) do
+  //       let random_key:U64 = all_keys((_rand.u64() % all_keys.size().u64()).usize())?
+  //       _env.out.print("Node " + node_id.string() + " is looking up key " + random_key.string())
+  //       node.lookup_key(random_key)
+  //     end
+  //   end
+
+  be lookup_key() =>
+
+      try
+        for key in nodes_map.keys() do
+          node_ids.push(key)
+        end
+
+        Sort[Array[U64], U64](node_ids)
+
+        // Assign keys to nodes based on `key <= node_id` rule
+        for i in Range[U64](0, node_ids.size().u64()) do
+          try
+            let current_node_id = node_ids(i.usize())?
+
+            while (all_keys.size() > 0) and (all_keys.peek()? <= current_node_id) do
+              let k: U64 = all_keys.peek()?
+              nodes_map(current_node_id)?.store_key(k, initial_data(k)?)
+              _env.out.print("Key : " + k.string() + " in Node_id: " + current_node_id.string())
+              all_keys.pop()?
+            end
+          else
+            _env.out.print("Key or value not found!")
+          end
+        end
+
+
+        while all_keys.size() > 0 do
+          let k: U64 = all_keys.pop()?
+          let first_node_id = node_ids(0)?
+          nodes_map(first_node_id)?.store_key(k, initial_data(k)?)
+          _env.out.print("Fallback assignment - Key: " + k.string() + " in Node_id: " + first_node_id.string())
+        end
+        let random_key:U64 = temp_array((_rand.u64() % temp_array.size().u64()).usize())?
+        let random_id:U64 = node_ids((_rand.u64() % node_ids.size().u64()).usize())?
+        _env.out.print("[Rishi]Node " + random_id.string() + " is looking up key " + random_key.string())
+  
+          nodes_map(random_id)?.lookup_key(random_key)
       else
-        node.join(bootstrap_node)
-        _env.out.print("Node with ID " + node_id.string() + " joined the network via bootstrap node " + bootstrap_node_id.string())
+        _env.out.print("Value not available")
       end
-      nodes_map.update(node_id, node)
-    end
-
-
-  fun ref simulate_requests(num_requests: U64)? =>
-    _env.out.print("Simulating " + num_requests.string() + " requests per node.")
-
-    for node_id in nodes_map.keys() do
-      let node = nodes_map(node_id)?
-
-      for _ in Range[U64](0, num_requests) do
-        let random_key:U64 = all_keys((_rand.u64() % all_keys.size().u64()).usize())?
-        _env.out.print("Node " + node_id.string() + " is looking up key " + random_key.string())
-        node.lookup_key(random_key)
-      end
-    end
-
 
   be receive_hop_count(hops: U64) =>
     total_hops = total_hops + hops
     total_requests = total_requests + 1
+    _env.out.print("Receive Hop Count")
 
-
-    if total_requests == (numNodes * numRequests) then
+    if total_requests >= 1/* (numNodes * numRequests)*/ then
+      for node in nodes_map.values() do
+        node.stop()
+      end
       calculate_average_hops()
       try
         for i in Range[U64](0, numNodes) do
@@ -123,3 +190,26 @@ actor Main
     else
       _env.out.print("No requests completed.")
     end
+
+  be node_stabilized(node_id: U64) =>
+    stabilized_nodes.push(node_id)
+    _env.out.print("Node " + node_id.string() + " reported stabilization.")
+    
+    if stabilized_nodes.size().u64() == numNodes then
+      _env.out.print("Chord network has fully stabilized.")
+      lookup_key()
+    end
+
+
+class Notify is TimerNotify
+  let _main: Main
+  let _env: Env
+
+  new iso create(main: Main, env: Env) =>
+    _main = main
+    _env = env
+
+  fun ref apply(timer: Timer, count: U64): Bool =>
+    _env.out.print("Notify triggered.")
+    _main.lookup_key()
+    true
