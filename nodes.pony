@@ -132,7 +132,7 @@ be find_successor(id: U64, requestor: Node, purpose: String = "find_successor", 
   end
 
   be perform_key_lookup(key: U64, requestor: Node, hop_count: U64 = 0) =>
-    _env.out.print("[Rishi]Lookup for key " + key.string() + " in " + _id.string() + " at hop " + hop_count.string())
+    // _env.out.print("[Rishi]Lookup for key " + key.string() + " in " + _id.string() + " at hop " + hop_count.string())
 
     // Check if this node is responsible for the key
     if in_range(key, _predecessor_id, _id) then
@@ -166,9 +166,9 @@ be find_successor(id: U64, requestor: Node, purpose: String = "find_successor", 
       // None
       _env.out.print("[Rishi]Lookup result for key " + key.string() + " not found after " + hops.string() + " hops.")
     else
-      _env.out.print("[Rishi]Lookup result for key " + key.string() + " found in " + hops.string() + " hops.")
+      // _env.out.print("[Rishi]Lookup result for key " + key.string() + " found in " + hops.string() + " hops.")
       // print_finger_table()
-      _main.receive_hop_count(hops)
+      _main.receive_hop_count(_id, hops)
     end
 
 

@@ -156,37 +156,40 @@ actor Main
 
  
 
-  // fun ref simulate_requests(num_requests: U64)? =>
-  //   _env.out.print("Simulating " + num_requests.string() + " requests per node.")
-
-  //   for node_id in nodes_map.keys() do
-  //     let node = nodes_map(node_id)?
-
-  //     for _ in Range[U64](0, num_requests) do
-  //       let random_key:U64 = all_keys((_rand.u64() % all_keys.size().u64()).usize())?
-  //       _env.out.print("Node " + node_id.string() + " is looking up key " + random_key.string())
-  //       node.lookup_key(random_key)
-  //     end
-  //   end
-
   be lookup_key() =>
+    // _env.out.print("Simulating " + num_requests.string() + " requests per node.")
+    try 
+      for node_id in nodes_map.keys() do
+        let node: Node = nodes_map(node_id)?
 
-      try
-        let random_key:U64 = temp_array((_rand.u64() % temp_array.size().u64()).usize())?
-        let random_id:U64 = node_ids((_rand.u64() % node_ids.size().u64()).usize())?
-        _env.out.print("[Rishi]Node " + random_id.string() + " is looking up key " + random_key.string())
-  
-          nodes_map(random_id)?.lookup_key(random_key)
-      else
-        _env.out.print("Value not available")
+        for _ in Range[U64](0, numRequests) do
+          let random_key:U64 = temp_array((_rand.u64() % temp_array.size().u64()).usize())?
+          _env.out.print("Node " + node_id.string() + " is looking up key " + random_key.string())
+          node.lookup_key(random_key)
+        end
       end
+    else
+      _env.out.print("[Lookup]Key index Out of bound")
+    end
 
-  be receive_hop_count(hops: U64) =>
+  // be lookup_key() =>
+
+  //     try
+  //       let random_key:U64 = temp_array((_rand.u64() % temp_array.size().u64()).usize())?
+  //       let random_id:U64 = node_ids((_rand.u64() % node_ids.size().u64()).usize())?
+  //       _env.out.print("[Rishi]Node " + random_id.string() + " is looking up key " + random_key.string())
+  
+  //         nodes_map(random_id)?.lookup_key(random_key)
+  //     else
+  //       _env.out.print("Value not available")
+  //     end
+
+  be receive_hop_count(node_id:U64, hops: U64) =>
     total_hops = total_hops + hops
     total_requests = total_requests + 1
-    _env.out.print("Receive Hop Count")
+    _env.out.print("Node id: "+ node_id.string() +",Hop Count: " + hops.string())
 
-    if total_requests >= 1/* (numNodes * numRequests)*/ then
+    if total_requests >= (numNodes * numRequests) then
       for node in nodes_map.values() do
         node.stop()
       end
@@ -195,7 +198,7 @@ actor Main
 
   fun ref calculate_average_hops() =>
     if total_requests > 0 then
-      let average_hops = (total_hops / total_requests)
+      let average_hops:F64 = (total_hops.f64() / total_requests.f64()).f64()
       _env.out.print("Average number of hops per lookup: " + average_hops.string())
     else
       _env.out.print("No requests completed.")
@@ -203,7 +206,7 @@ actor Main
 
   be node_stabilized(node_id: U64) =>
     stabilized_nodes.push(node_id)
-    _env.out.print("Node " + node_id.string() + " reported stabilization.")
+    // _env.out.print("Node " + node_id.string() + " reported stabilization.")
     
     if stabilized_nodes.size().u64() == numNodes then
       _env.out.print("Chord network has fully stabilized.")
