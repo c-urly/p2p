@@ -71,11 +71,11 @@ actor Main
 
       // First, generate nodes and store them in nodes_list
       for i in Range[U64](0, num_nodes) do
-        var node_id: U64 = _rand.u64() % (id_space + 1)
+        var node_id: U64 = _rand.int_unbiased(id_space)
         
         // Ensure node_id is unique
         while node_ids_set.contains(node_id) do
-          node_id = _rand.u64() % (id_space + 1)
+          node_id = _rand.int_unbiased(id_space)
         end
         
         let node: Node tag = Node(_env, this, node_id, m)
@@ -87,7 +87,7 @@ actor Main
       end
 
       // Select a random bootstrap node from nodes_list
-      let bootstrap_index = _rand.u64() % num_nodes
+      let bootstrap_index = _rand.int_unbiased(num_nodes)
       let bootstrap_node: Node = nodes_list(bootstrap_index.usize())?._2
       let bootstrap_node_id: U64 = nodes_list(bootstrap_index.usize())?._1
       _env.out.print("[Rishi]Selected bootstrap node with ID: " + bootstrap_node_id.string())
@@ -107,11 +107,11 @@ actor Main
       var all_keys_set: Set[U64] = Set[U64]()  // Set to track unique keys
 
       for i in Range[U64](0, num_keys) do
-        var key: U64 = _rand.u64() % (max_id)
+        var key: U64 = _rand.int_unbiased(max_id)
         
         // Ensure key is unique
         while all_keys_set.contains(key) do
-          key = _rand.u64() % (max_id)
+          key = _rand.int_unbiased(max_id)
         end
         
         all_keys.push(key)

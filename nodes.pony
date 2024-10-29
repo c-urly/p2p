@@ -1,6 +1,5 @@
 use "time"
 use "collections"
-use "random"
 
 actor Node
   let _env: Env
@@ -19,7 +18,6 @@ actor Node
   var _data: Map[U64, String] iso
   let _main: Main
   let timers: Timers
-  let _rand: Rand
   var successor_stable_rounds: U64 = 0
   var predecessor_stable_rounds: U64 = 0
   var finger_table_stable_rounds: U64 = 0
@@ -45,29 +43,25 @@ actor Node
     _predecessor_id = id
     _main = main
     _stabilized = false
-    _rand = Rand(Time.now()._2.u64())
 
     _env.out.print("Node " + _id.string() + " created with " + m.string() + " bit hash space and initial keys.")
 
     // Generate random interval for stabilize timer (up to 5 seconds max)
-    let stabilize_max:U64 = 1_00_000_000
-    let stabilize_interval:U64 = /* _rand.u64() % */stabilize_max
+    let stabilize_interval:U64 = 1_00_000_000
     let stabilize_notify = ChordTimerNotify(_env, this, _id, "stabilize")
     let stabilize_timer' = Timer(consume stabilize_notify, 1_000_000_000, stabilize_interval)
     _stabilize_timer = stabilize_timer'
     timers(consume stabilize_timer')
 
     // Generate random interval for fix_fingers timer (up to 10 seconds max)
-    let fix_fingers_max:U64 = 1_000_00
-    let fix_fingers_interval:U64 = /* _rand.u64() % */ fix_fingers_max
+    let fix_fingers_interval:U64 = 1_000_0
     let fix_fingers_notify = ChordTimerNotify(_env, this, _id, "fix_fingers")
     let fix_fingers_timer = Timer(consume fix_fingers_notify, 1_000_000_000, fix_fingers_interval)
     _timer = fix_fingers_timer
     timers(consume fix_fingers_timer)
 
     // Generate random interval for check_predecessor timer (up to 8 seconds max)
-    let check_predecessor_max:U64 = 1_00_000_0000
-    let check_predecessor_interval:U64 = /* _rand.u64() % */ check_predecessor_max
+    let check_predecessor_interval:U64 = 1_00_000_0000
     let check_predecessor_notify = ChordTimerNotify(_env, this, _id, "check_predecessor")
     let check_predecessor_timer = Timer(consume check_predecessor_notify, 1_000_000_000, check_predecessor_interval)
     _predecessor_check_timer = check_predecessor_timer
@@ -298,7 +292,8 @@ be find_successor(id: U64, requestor: Node, purpose: String = "find_successor", 
       // _env.out.print("Confirmed that predecessor " + caller_id.string() + " is alive for node: " + _id.string())
       None
     else
-      _env.out.print("Received alive signal from unknown node.")
+      None
+      // _env.out.print("[" +_id.string() +"]Received alive signal from "+ caller_id.string() +" node which is not predecessor: " + _predecessor_id.string())
     end
 
   fun ref check_stabilization() =>
