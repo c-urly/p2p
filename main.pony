@@ -60,7 +60,7 @@ actor Main
 
 
   fun ref generate_nodes_with_keys(num_nodes: U64, num_keys: U64)? =>
-      let m: USize = 10  // Setting m to 10, or calculate based on num_nodes if needed
+      let m: USize = 32  // Setting m to 10, or calculate based on num_nodes if needed
       let id_space: U64 = (1 << m.u64()) - 1  // 2^m - 1 for the ID space
 
       let keys_per_node = num_keys / num_nodes

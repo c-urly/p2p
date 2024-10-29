@@ -58,7 +58,7 @@ actor Node
     timers(consume stabilize_timer')
 
     // Generate random interval for fix_fingers timer (up to 10 seconds max)
-    let fix_fingers_max:U64 = 1_0_000_00
+    let fix_fingers_max:U64 = 1_000_00
     let fix_fingers_interval:U64 = /* _rand.u64() % */ fix_fingers_max
     let fix_fingers_notify = ChordTimerNotify(_env, this, _id, "fix_fingers")
     let fix_fingers_timer = Timer(consume fix_fingers_notify, 1_000_000_000, fix_fingers_interval)
@@ -112,20 +112,27 @@ be find_successor(id: U64, requestor: Node, purpose: String = "find_successor", 
       _env.out.print("Unknown purpose in find_successor.")
     end
   else
-    let closest_node = closest_preceding_node(id)
 
-    match purpose
-    | "lookup_key" =>
-        closest_node.find_successor(id, requestor, purpose, hop_count + 1)
-    | "update_finger" =>
-        closest_node.find_successor(id, requestor, purpose, 0, finger_index)
-    | "find_successor" =>
-        closest_node.find_successor(id, requestor, purpose)
-    end  
+      // Use closest_preceding_node to get the closest node to the key
+      var closest_node = closest_preceding_node(id)
+      if closest_node is this then
+        // If no closer node is found, forward to successor
+        closest_node  = _predecessor
+      end
+
+        match purpose
+        | "lookup_key" =>
+            closest_node.find_successor(id, requestor, purpose, hop_count + 1)
+        | "update_finger" =>
+            closest_node.find_successor(id, requestor, purpose, 0, finger_index)
+        | "find_successor" =>
+            closest_node.find_successor(id, requestor, purpose)
+        end  
+   
   end
 
   be perform_key_lookup(key: U64, requestor: Node, hop_count: U64 = 0) =>
-    // _env.out.print("[Rishi]Lookup for key " + key.string() + " in " + _id.string() + " at hop " + hop_count.string())
+    _env.out.print("[Rishi]Lookup for key " + key.string() + " in " + _id.string() + " at hop " + hop_count.string())
 
     // Check if this node is responsible for the key
     if in_range(key, _predecessor_id, _id) then
@@ -137,6 +144,7 @@ be find_successor(id: U64, requestor: Node, purpose: String = "find_successor", 
         requestor.receive_lookup_result(key, "None", hop_count)
       end
     else
+
       // Use closest_preceding_node to get the closest node to the key
       let closest_node = closest_preceding_node(key)
       if closest_node is this then
@@ -146,6 +154,7 @@ be find_successor(id: U64, requestor: Node, purpose: String = "find_successor", 
         // Forward to the closest preceding node found in the finger table
         closest_node.perform_key_lookup(key, requestor, hop_count + 1)
       end
+
     end
 
 
@@ -157,7 +166,7 @@ be find_successor(id: U64, requestor: Node, purpose: String = "find_successor", 
       // None
       _env.out.print("[Rishi]Lookup result for key " + key.string() + " not found after " + hops.string() + " hops.")
     else
-      // _env.out.print("[Rishi]Lookup result for key " + key.string() + " found in " + hops.string() + " hops.")
+      _env.out.print("[Rishi]Lookup result for key " + key.string() + " found in " + hops.string() + " hops.")
       // print_finger_table()
       _main.receive_hop_count(hops)
     end
@@ -177,32 +186,36 @@ be find_successor(id: U64, requestor: Node, purpose: String = "find_successor", 
 
 
   fun ref check_finger_table_stabilization()? =>
-    var is_stabilized = true
+      var is_stabilized = true
 
-    for i in Range[USize](0, _m) do
-      let current_entry = _finger_table(i)?
-      let previous_entry = _previous_finger_table(i)?
-
-      // Compare current and previous entries
-      if (current_entry._1 != previous_entry._1) then
-        is_stabilized = false
-        break
-      end
-    end
-
-    if is_stabilized then
-      // Increment stable rounds only if finger table hasn't changed
-      finger_table_stable_rounds = finger_table_stable_rounds + 1
-      check_stabilization()
-    else
-      // Reset stable rounds if the finger table has changed
-      finger_table_stable_rounds = 0
-
-      // Update previous finger table to the current state for the next cycle
       for i in Range[USize](0, _m) do
-        _previous_finger_table(i)? = _finger_table(i)?
+        let current_entry = _finger_table(i)?
+        let previous_entry = _previous_finger_table(i)?
+
+        // Calculate the minimum required ID for this finger based on (2^i + _id) % 2^m
+        let required_id: U64 = (_id + (1 << i.u64()).u64()) % (1 << _m).u64()
+
+        // Check if the finger entry has changed or does not satisfy the offset condition (ID >= (2^i + _id) % 2^m)
+        if (current_entry._1 != previous_entry._1) or (current_entry._1 < required_id) then
+          is_stabilized = false
+          break
+        end
       end
-    end
+
+      if is_stabilized then
+        // Increment stable rounds only if finger table hasn't changed and offsets are valid
+        finger_table_stable_rounds = finger_table_stable_rounds + 1
+        check_stabilization()
+      else
+        // Reset stable rounds if the finger table has changed or offsets are invalid
+        finger_table_stable_rounds = 0
+
+        // Update previous finger table to the current state for the next cycle
+        for i in Range[USize](0, _m) do
+          _previous_finger_table(i)? = _finger_table(i)?
+        end
+      end
+
 
 
   be fix_fingers() =>
@@ -210,11 +223,11 @@ be find_successor(id: U64, requestor: Node, purpose: String = "find_successor", 
 
     if _next_finger >= _m then
       _next_finger = 0
-      try
-        check_finger_table_stabilization()?
-      else
-        _env.out.print("Finger table Index Out of bound")
-      end
+      // try
+      //   // check_finger_table_stabilization()?
+      // else
+      //   _env.out.print("Finger table Index Out of bound")
+      // end
     end
 
     let target_key: U64 = (_id + (1 << _next_finger).u64()) % (1 << _m).u64()
@@ -250,9 +263,11 @@ be find_successor(id: U64, requestor: Node, purpose: String = "find_successor", 
 
       i = i - 1
     end
-
-    this
-
+    // try
+      // _finger_table((_m-1).usize())?._2
+    // else
+      this
+    // end
 
   be lookupkey()=>
     None
@@ -287,7 +302,7 @@ be find_successor(id: U64, requestor: Node, purpose: String = "find_successor", 
     end
 
   fun ref check_stabilization() =>
-    if (((successor_stable_rounds >= 3 )and (predecessor_stable_rounds >= 3)) and (finger_table_stable_rounds >= 3) ) and (not _stabilized) then
+    if ((successor_stable_rounds >= 2) and (predecessor_stable_rounds >= 2)) and (not _stabilized) then
       _stabilized = true
        _main.node_stabilized(_id)
     end
@@ -335,7 +350,7 @@ be find_successor(id: U64, requestor: Node, purpose: String = "find_successor", 
 
 
 
-  fun final()=>
+  fun ref final()=>
     _env.out.print("Deleting node: "+_id.string())
     
   be stop() =>
