@@ -17,7 +17,7 @@ class ChordTimerNotify is TimerNotify
         // _env.out.print("Stabalize Timer Executing "+ _id.string() )
         _node.stabilize()
     | "fix_fingers" =>
-        _env.out.print("Fix Fingers Timer Executing " + _id.string())
+        // _env.out.print("Fix Fingers Timer Executing " + _id.string())
         _node.fix_fingers()
     | "check_predecessor" =>
         // _env.out.print("Check Predecessor Timer Executing " + _id.string())
